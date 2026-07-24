@@ -12,7 +12,7 @@ extra**— y la app:
 4. Descarga un **ZIP** con el PDF ensamblado + el XML.
 
 Todo ocurre en el navegador: **no hay backend**, nada se sube a ningún
-servidor. Se despliega en GitHub Pages, igual que [`qr`](../qr).
+servidor. Se despliega en GitHub Pages.
 
 ```mermaid
 flowchart LR
@@ -41,7 +41,7 @@ lo que puede y deja el resto editable.
 | | Parentesco | `TITULAR` si el paciente es la titular; si no, manual |
 | | Fecha de nacimiento | **No viene en el CFDI** — se captura (se recuerda por paciente) |
 | Fecha de entrega | Día de ejecución | Fecha de hoy |
-| Titular, banco, firma | — | Constantes (de `src/base/Base.xlsx`) |
+| Titular, banco, firma | — | Constantes |
 
 El desglose de nombres usa una heurística (los dos últimos tokens son los
 apellidos); por eso **todos los campos son editables** antes de generar, para
@@ -50,7 +50,7 @@ los casos ambiguos (apellidos compuestos, nombre del paciente distinto, etc.).
 ## Fidelidad del formato
 
 El PDF del formato se genera con **pdfmake** (texto vectorial nítido y la firma
-escaneada de la titular), reproduciendo el layout de `src/base/Base.xlsx`
+escaneada de la titular), reproduciendo el layout del formato original
 —secciones, sombreados y textos legales—. Es una **reproducción fiel**, no una
 conversión byte a byte del Excel (eso solo lo garantizaría abrir el XLSX en
 Excel/LibreOffice).
@@ -71,12 +71,6 @@ npm run deploy   # build + publish a GitHub Pages (gh-pages)
 ```
 
 ## Estructura
-
-`src/base/` guarda la plantilla `Base.xlsx` y facturas de ejemplo. **No se
-versiona** (está en `.gitignore`) porque contiene datos reales —nombres, RFC y
-la firma escaneada—. La app no lo necesita en runtime: la firma vive embebida en
-`frontend/src/assets/firma.ts` y los datos constantes (titular, banco, textos)
-en `frontend/src/facturas/constants.ts`, extraídos de esa plantilla.
 
 ```
 src/base/                 Base.xlsx + ejemplos (local, no versionado)
