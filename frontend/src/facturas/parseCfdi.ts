@@ -5,6 +5,7 @@ import {
   isoAFechaDMA,
   lugarFechaHoy,
   normalizar,
+  parseDescripcion,
   parsearFechaCita,
   separarNombre,
 } from "./util";
@@ -22,18 +23,6 @@ function first(root: Document | Element, local: string): Element | null {
     if (all[i].localName === local) return all[i];
   }
   return null;
-}
-
-// Extrae "PACIENTE: ...", "CONSULTA: ...", "CITA: ..." de la descripción.
-// Devuelve el texto de cada etiqueta (sin la etiqueta), o "" si no está.
-function campoDescripcion(desc: string, etiqueta: string): string {
-  // Captura hasta la siguiente etiqueta conocida o el fin del texto.
-  const re = new RegExp(
-    `${etiqueta}\\s*:?\\s*(.*?)(?=\\s*(?:PACIENTE|CONSULTA|CITA)\\s*:|$)`,
-    "is"
-  );
-  const m = desc.match(re);
-  return m ? m[1].trim().replace(/[.\s]+$/, "").trim() : "";
 }
 
 export function parseCfdi(
@@ -71,46 +60,66 @@ export function parseCfdi(
   const medico = separarNombre(nombreEmisor);
   if (!nombreEmisor) avisos.push("El CFDI no trae nombre del emisor (médico).");
 
-  // --- Descripción: paciente, especialidad (consulta), fecha de cita ---
-  const pacienteDesc = campoDescripcion(descripcion, "PACIENTE");
-  const consulta = campoDescripcion(descripcion, "CONSULTA");
-  const cita = campoDescripcion(descripcion, "CITA");
+  // --- Descripción: paciente, especialidad y fecha de consulta ---
+  const desc = parseDescripcion(descripcion);
 
-  const nombrePaciente = pacienteDesc || nombreReceptor;
+  const nombrePaciente = desc.nombrePaciente || nombreReceptor;
   const paciente = separarNombre(nombrePaciente);
-  if (!pacienteDesc) {
+  if (!desc.nombrePaciente) {
     avisos.push(
-      "No se encontró 'PACIENTE:' en la descripción; se usó el receptor del CFDI."
+      "No se pudo leer el paciente de la descripción; se usó el receptor del CFDI."
     );
   }
 
-  // Parentesco: si el paciente es el titular, es "TITULAR"; si no, en blanco.
+  const especialidad = desc.especialidad;
+  if (!especialidad) {
+    avisos.push(
+      "No se pudo deducir la especialidad de la descripción: captúrala."
+    );
+  }
+
+  // --- Parentesco: conjunto cerrado (TITULAR / CÓNYUGE / HIJO / HIJA) ---
+  // Se basa en el PACIENTE: el receptor del CFDI siempre es la titular (quien
+  // recibe la factura), así que no sirve para deducir el parentesco.
   const esTitular =
-    normalizar(nombrePaciente) === TITULAR.nombreCompletoNormalizado ||
-    normalizar(nombreReceptor) === TITULAR.nombreCompletoNormalizado;
-  const parentesco = esTitular ? "TITULAR" : "";
-  if (!esTitular) {
+    normalizar(nombrePaciente) === TITULAR.nombreCompletoNormalizado;
+
+  // ¿El paciente comparte algún apellido con la titular? (indicio de hijo/a)
+  const apellidosTitular = new Set(
+    [TITULAR.apellidoPaterno, TITULAR.apellidoMaterno].map(normalizar)
+  );
+  const comparteApellido = [paciente.apellidoPaterno, paciente.apellidoMaterno]
+    .map(normalizar)
+    .filter(Boolean)
+    .some((a) => apellidosTitular.has(a));
+
+  let parentesco = "";
+  if (esTitular) {
+    parentesco = "TITULAR";
+  } else if (comparteApellido) {
+    parentesco = "HIJA"; // inferido; el apellido no distingue género
     avisos.push(
-      "El parentesco no viene en el CFDI: complétalo manualmente."
+      'Parentesco inferido como "HIJA" por apellido compartido con la titular: verifica si es Hijo o Cónyuge.'
     );
+  } else {
+    avisos.push("El parentesco no viene en el CFDI: selecciónalo.");
   }
 
-  const especialidad = consulta;
-  if (!consulta) {
-    avisos.push(
-      "No se encontró 'CONSULTA:' en la descripción: captura la especialidad."
-    );
-  }
-
-  // --- Fecha de consulta: de la CITA, con año de la factura ---
+  // --- Fecha de consulta: de la descripción, con año de la factura ---
   const anioFactura = isoAFechaDMA(fechaIso).anio;
-  let fechaConsulta = cita ? parsearFechaCita(cita, anioFactura) : null;
+  let fechaConsulta = desc.fechaTexto
+    ? parsearFechaCita(desc.fechaTexto, anioFactura)
+    : null;
   if (!fechaConsulta) {
-    // Sin cita legible, se usa la fecha de emisión del CFDI.
+    // Sin fecha legible en la descripción, se usa la de emisión del CFDI.
     fechaConsulta = isoAFechaDMA(fechaIso);
-    if (cita) {
+    if (desc.fechaTexto) {
       avisos.push(
-        `No se pudo interpretar la CITA ("${cita}"); se usó la fecha de emisión.`
+        `No se pudo interpretar la fecha ("${desc.fechaTexto}"); se usó la de emisión.`
+      );
+    } else {
+      avisos.push(
+        "No se encontró fecha de consulta en la descripción: se usó la de emisión, verifícala."
       );
     }
   }

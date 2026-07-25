@@ -361,9 +361,10 @@ function Formulario({
           value={datos.paciente.nombre}
           onChange={(v) => setPersona("paciente", "nombre", v)}
         />
-        <Campo
+        <SelectCampo
           label="Parentesco"
           value={datos.parentesco}
+          opciones={["", "TITULAR", "CÓNYUGE", "HIJO", "HIJA"]}
           onChange={(v) => set("parentesco", v)}
         />
         <Campo
@@ -490,6 +491,31 @@ function Campo({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
+    </label>
+  );
+}
+
+function SelectCampo({
+  label,
+  value,
+  opciones,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  opciones: string[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className="campo">
+      <span>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {opciones.map((o) => (
+          <option key={o} value={o}>
+            {o || "— Selecciona —"}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }

@@ -270,7 +270,8 @@ legend {
   font-size: 0.78rem;
   color: var(--text-muted);
 }
-.campo input {
+.campo input,
+.campo select {
   width: 100%;
   min-width: 0;
   padding: 0.5rem 0.6rem;
@@ -280,7 +281,8 @@ legend {
   color: var(--text);
   font-size: 0.9rem;
 }
-.campo input:focus {
+.campo input:focus,
+.campo select:focus {
   outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-color: var(--accent);
 }

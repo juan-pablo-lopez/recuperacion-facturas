@@ -86,21 +86,24 @@ export function lugarFechaHoy(lugar: string): string {
   return `${lugar}, ${d.getDate()} de ${MESES_CAP[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-// Intenta interpretar la fecha de la cita ("11 DE JUNIO 6:30", "11/06", etc.)
-// usando el año de la factura como referencia. Devuelve null si no puede.
+// Intenta interpretar una fecha en texto ("11 DE JUNIO 6:30",
+// "16 de mayo del 2026", "11/06", "16/05/2026", etc.) usando el año de la
+// factura como referencia cuando el texto no trae año. Devuelve null si no puede.
 export function parsearFechaCita(
   cita: string,
   anioFactura: string
 ): FechaDMA | null {
   const texto = normalizar(cita);
 
-  // Formato "DD DE MES ..."
-  let m = texto.match(/(\d{1,2})\s+DE\s+([A-ZÁÉÍÓÚÑ]+)/);
+  // Formato "DD DE MES [DE|DEL AAAA]"
+  let m = texto.match(/(\d{1,2})\s+DE\s+([A-ZÁÉÍÓÚÑ]+)(?:\s+DEL?\s+(\d{2,4}))?/);
   if (m) {
-    const dia = m[1].padStart(2, "0");
     const idx = MESES.indexOf(normalizar(m[2]));
     if (idx >= 0) {
-      return { dia, mes: String(idx + 1).padStart(2, "0"), anio: anioFactura };
+      const dia = m[1].padStart(2, "0");
+      let anio = anioFactura;
+      if (m[3]) anio = m[3].length === 2 ? "20" + m[3] : m[3];
+      return { dia, mes: String(idx + 1).padStart(2, "0"), anio };
     }
   }
 
@@ -115,6 +118,88 @@ export function parsearFechaCita(
   }
 
   return null;
+}
+
+// Patrón de fecha dentro de un texto libre (para ubicar dónde empieza).
+const FECHA_EN_TEXTO =
+  /\d{1,2}\s+de\s+[a-záéíóúñ]+(?:\s+del?\s+\d{2,4})?|\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?/i;
+
+// Palabras que marcan el inicio del tratamiento/especialidad en descripciones
+// sin etiquetas (donde el nombre del paciente va pegado al resto del texto).
+const TRATAMIENTO =
+  /\b(terapia|consulta|sesi[oó]n|psicolog\w*|nutri\w*|valoraci[oó]n|tratamiento|rehabilitaci[oó]n|fisioterapia|evaluaci[oó]n|revisi[oó]n|dental|m[eé]dic\w*)\b/i;
+
+function limpiarNombre(s: string): string {
+  return s
+    .trim()
+    .replace(/[.,;:]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function limpiarEspecialidad(s: string): string {
+  return s
+    .trim()
+    .replace(/^[\s.,;:-]+/, "")
+    .replace(/[\s.,;:-]+$/, "")
+    .replace(/\s+(del|de|el|la|los|las|en|por|con)\s*$/i, "")
+    .replace(/[\s.,;:-]+$/, "")
+    .trim();
+}
+
+export interface DescripcionParseada {
+  nombrePaciente: string;
+  especialidad: string;
+  fechaTexto: string;
+}
+
+// Extrae paciente, especialidad y fecha de la descripción del concepto.
+// Soporta dos patrones:
+//   Etiquetado: "PACIENTE: ... CONSULTA: ... CITA: ..."
+//   Libre:      "Paciente: <nombre> <tratamiento> del <fecha>."
+export function parseDescripcion(desc: string): DescripcionParseada {
+  const out: DescripcionParseada = {
+    nombrePaciente: "",
+    especialidad: "",
+    fechaTexto: "",
+  };
+  if (!desc || !desc.trim()) return out;
+
+  // Texto tras "Paciente:" (si existe la etiqueta); si no, toda la descripción.
+  const mp = desc.match(/paciente\s*:?\s*(.*)$/is);
+  const resto = (mp ? mp[1] : desc).trim();
+
+  // --- Patrón etiquetado: respeta CONSULTA:/CITA: ---
+  if (/\bconsulta\s*:/i.test(resto) || /\bcita\s*:/i.test(resto)) {
+    out.nombrePaciente = limpiarNombre(
+      resto.split(/\s*(?:consulta|cita)\s*:/i)[0]
+    );
+    const mc = resto.match(/consulta\s*:\s*([^.]*)/i);
+    if (mc) out.especialidad = limpiarEspecialidad(mc[1]);
+    const mci = resto.match(/cita\s*:\s*(.*)$/i);
+    if (mci) out.fechaTexto = mci[1].trim();
+    return out;
+  }
+
+  // --- Patrón libre: nombre + tratamiento + fecha, todo pegado ---
+  const fechaMatch = resto.match(FECHA_EN_TEXTO);
+  const tratMatch = resto.match(TRATAMIENTO);
+
+  // El nombre termina donde antes empiece el tratamiento o la fecha.
+  let corte = resto.length;
+  if (tratMatch?.index !== undefined && tratMatch.index < corte)
+    corte = tratMatch.index;
+  if (fechaMatch?.index !== undefined && fechaMatch.index < corte)
+    corte = fechaMatch.index;
+
+  out.nombrePaciente = limpiarNombre(resto.slice(0, corte));
+  if (fechaMatch) out.fechaTexto = fechaMatch[0];
+
+  const finEsp =
+    fechaMatch?.index !== undefined ? fechaMatch.index : resto.length;
+  out.especialidad = limpiarEspecialidad(resto.slice(corte, finEsp));
+
+  return out;
 }
 
 // Formatea un importe numérico como "$ 1,000.00".
