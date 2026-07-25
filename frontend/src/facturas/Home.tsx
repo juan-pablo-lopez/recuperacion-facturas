@@ -370,7 +370,7 @@ function Formulario({
         <Campo
           label="Fecha de nacimiento"
           value={datos.fechaNacimiento}
-          placeholder="DD de MES de AAAA"
+          placeholder="D/Mes/AAAA"
           onChange={(v) => set("fechaNacimiento", v)}
         />
       </fieldset>
