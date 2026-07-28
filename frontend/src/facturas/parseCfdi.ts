@@ -1,5 +1,4 @@
-import { TITULAR } from "./constants";
-import type { DatosFormulario, ResultadoParseo } from "./types";
+import type { DatosFormulario, PerfilTitular, ResultadoParseo } from "./types";
 import {
   hoyDMA,
   isoAFechaDMA,
@@ -9,7 +8,7 @@ import {
   parsearFechaCita,
   separarNombre,
 } from "./util";
-import { LUGAR_BASE } from "./constants";
+import { nombreTitularNormalizado, perfilCompleto } from "./perfil";
 
 // Lee un atributo de un elemento sin depender del prefijo de namespace.
 function attr(el: Element | null, name: string): string {
@@ -27,7 +26,8 @@ function first(root: Document | Element, local: string): Element | null {
 
 export function parseCfdi(
   xmlTexto: string,
-  nombreArchivoXml: string
+  nombreArchivoXml: string,
+  perfil: PerfilTitular
 ): ResultadoParseo {
   const avisos: string[] = [];
   const doc = new DOMParser().parseFromString(xmlTexto, "application/xml");
@@ -81,12 +81,16 @@ export function parseCfdi(
   // --- Parentesco: conjunto cerrado (TITULAR / CÓNYUGE / HIJO / HIJA) ---
   // Se basa en el PACIENTE: el receptor del CFDI siempre es la titular (quien
   // recibe la factura), así que no sirve para deducir el parentesco.
+  // Sin perfil capturado no hay con qué comparar: el parentesco se selecciona.
+  const nombreTitular = nombreTitularNormalizado(perfil);
   const esTitular =
-    normalizar(nombrePaciente) === TITULAR.nombreCompletoNormalizado;
+    Boolean(nombreTitular) && normalizar(nombrePaciente) === nombreTitular;
 
-  // ¿El paciente comparte algún apellido con la titular? (indicio de hijo/a)
+  // ¿El paciente comparte algún apellido con el titular? (indicio de hijo/a)
   const apellidosTitular = new Set(
-    [TITULAR.apellidoPaterno, TITULAR.apellidoMaterno].map(normalizar)
+    [perfil.titular.apellidoPaterno, perfil.titular.apellidoMaterno]
+      .map(normalizar)
+      .filter(Boolean)
   );
   const comparteApellido = [paciente.apellidoPaterno, paciente.apellidoMaterno]
     .map(normalizar)
@@ -99,10 +103,16 @@ export function parseCfdi(
   } else if (comparteApellido) {
     parentesco = "HIJA"; // inferido; el apellido no distingue género
     avisos.push(
-      'Parentesco inferido como "HIJA" por apellido compartido con la titular: verifica si es Hijo o Cónyuge.'
+      'Parentesco inferido como "HIJA" por apellido compartido con el titular: verifica si es Hijo o Cónyuge.'
     );
   } else {
     avisos.push("El parentesco no viene en el CFDI: selecciónalo.");
+  }
+
+  if (!perfilCompleto(perfil)) {
+    avisos.push(
+      "Faltan datos del titular: complétalos en “Datos del titular y depósito”."
+    );
   }
 
   // --- Fecha de consulta: de la descripción, con año de la factura ---
@@ -142,7 +152,7 @@ export function parseCfdi(
     importe: total,
     numeroFactura,
     fechaEntrega: hoyDMA(),
-    lugarFecha: lugarFechaHoy(LUGAR_BASE),
+    lugarFecha: lugarFechaHoy(perfil.lugar),
   };
 
   const nombreBase = nombreArchivoXml.replace(/\.[^.]+$/, "");

@@ -5,19 +5,16 @@ import type {
   TableCell,
   TDocumentDefinitions,
 } from "pdfmake/interfaces";
-import type { DatosFormulario } from "./types";
+import type { DatosFormulario, PerfilTitular } from "./types";
 import {
   CONFIDENCIAL,
-  DEPOSITO,
   EMPRESA,
-  TITULAR,
   TITULO_FORMATO,
   AVISO_PRIVACIDAD_PRE,
   AVISO_PRIVACIDAD_ASEGURADORA,
   AVISO_PRIVACIDAD_POST,
 } from "./constants";
 import { formatoImporte } from "./util";
-import { FIRMA_TITULAR } from "../assets/firma";
 
 // vfs_fonts expone las fuentes de distinta forma según el empaquetado.
 const vfs =
@@ -98,7 +95,8 @@ function tablaPersona(
 }
 
 export async function buildFormPdf(
-  datos: DatosFormulario
+  datos: DatosFormulario,
+  perfil: PerfilTitular
 ): Promise<Uint8Array> {
   const { fechaEntrega: fe, fechaConsulta: fc } = datos;
 
@@ -108,10 +106,10 @@ export async function buildFormPdf(
     { text: "", margin: [0, 2, 0, 0] },
     barra("DATOS TITULAR"),
     tablaPersona(
-      TITULAR.apellidoPaterno,
-      TITULAR.apellidoMaterno,
-      TITULAR.nombre,
-      [lbl("NUMERO EMP:"), { ...td(TITULAR.numeroEmpleado), colSpan: 3 }, {}, {}]
+      perfil.titular.apellidoPaterno,
+      perfil.titular.apellidoMaterno,
+      perfil.titular.nombre,
+      [lbl("NUMERO EMP:"), { ...td(perfil.numeroEmpleado), colSpan: 3 }, {}, {}]
     ),
     barra("DATOS PACIENTE"),
     tablaPersona(
@@ -182,13 +180,34 @@ export async function buildFormPdf(
       table: {
         widths: [46, "*"],
         body: [
-          [{ text: "Clabe:", style: "label" }, td(DEPOSITO.clabe)],
-          [{ text: "Banco:", style: "label" }, td(DEPOSITO.banco)],
+          [{ text: "Clabe:", style: "label" }, td(perfil.clabe)],
+          [{ text: "Banco:", style: "label" }, td(perfil.banco)],
         ],
       },
       layout: bordeFino,
     },
   ];
+
+  // Con firma escaneada se estampa la imagen; sin ella se deja una línea para
+  // firmar a mano, ocupando un espacio equivalente.
+  const bloqueFirma: Content[] = perfil.firma
+    ? [{ image: perfil.firma, width: 120, alignment: "center" }]
+    : [
+        {
+          canvas: [
+            {
+              type: "line",
+              x1: 20,
+              y1: 0,
+              x2: 180,
+              y2: 0,
+              lineWidth: 0.7,
+              lineColor: "#000000",
+            },
+          ],
+          margin: [0, 34, 0, 2],
+        },
+      ];
 
   const docDefinition: TDocumentDefinitions = {
     pageSize: "LETTER",
@@ -233,7 +252,7 @@ export async function buildFormPdf(
           {
             width: "50%",
             stack: [
-              { image: FIRMA_TITULAR, width: 120, alignment: "center", margin: [0, 0, 0, 0] },
+              ...bloqueFirma,
               {
                 text: "FIRMA ASEGURADO TITULAR:",
                 fontSize: 8,

@@ -1,19 +1,8 @@
-// Valores constantes del formato (no dependen de la factura).
-// Provienen de src/base/Base.xlsx.
-
-export const TITULAR = {
-  apellidoPaterno: "TORRES",
-  apellidoMaterno: "DÍAZ",
-  nombre: "MARÍA ISABEL",
-  numeroEmpleado: "77607781",
-  // Nombre normalizado (sin acentos, mayúsculas) para comparar con el CFDI.
-  nombreCompletoNormalizado: "MARIA ISABEL TORRES DIAZ",
-} as const;
-
-export const DEPOSITO = {
-  clabe: "012 320 01138129797 2",
-  banco: "BBVA",
-} as const;
+// Valores constantes del formato: los que no dependen ni de la factura ni de
+// quién lo llena. Provienen de src/base/Base.xlsx.
+//
+// Los datos del titular (nombre, número de empleado, CLABE, firma, lugar) NO
+// viven aquí: son por persona y se capturan en la UI. Ver perfil.ts.
 
 export const EMPRESA =
   "IBM DE MEXICO, COMERCIALIZACION Y SERVICIOS, S. DE R.L. DE C.V.";
@@ -21,8 +10,6 @@ export const EMPRESA =
 export const TITULO_FORMATO = "RELACION DE REEMBOLSOS DE GASTOS CONSULTAS";
 
 export const CONFIDENCIAL = "*IBM Confidential when completed";
-
-export const LUGAR_BASE = "Zapopan Jalisco";
 
 export const AVISO_PRIVACIDAD_PRE = '"RECONOZCO Y ACEPTO QUE ';
 export const AVISO_PRIVACIDAD_ASEGURADORA =

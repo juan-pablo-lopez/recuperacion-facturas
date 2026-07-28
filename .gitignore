@@ -26,9 +26,10 @@ npm-debug.log*
 # macOS
 .DS_Store
 
-# Plantilla y facturas de ejemplo.
-# Contienen datos reales (nombres, RFC, firma) — no se versionan.
-# La firma y las constantes ya viven embebidas en frontend/src/.
+# Plantilla, facturas de ejemplo y firma escaneada.
+# Contienen datos reales (nombres, RFC, CLABE, firma) — no se versionan.
+# Los datos del titular se capturan en la UI y viven en localStorage, no en el
+# código: nada de esto se necesita para compilar.
 /src/base/
 
 # TypeScript cache

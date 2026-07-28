@@ -13,6 +13,17 @@ export interface FechaDMA {
   anio: string; // AAAA
 }
 
+// Datos de quien reclama el reembolso: no vienen del CFDI y no cambian entre
+// facturas, así que se capturan una vez y se guardan en localStorage.
+export interface PerfilTitular {
+  titular: PersonaNombre;
+  numeroEmpleado: string;
+  clabe: string;
+  banco: string;
+  lugar: string; // "Zapopan Jalisco" — se une con la fecha en el pie
+  firma: string; // data URI de la firma escaneada; "" = se deja línea en blanco
+}
+
 export interface DatosFormulario {
   // Datos del paciente (de la descripción del CFDI + captura manual).
   paciente: PersonaNombre;

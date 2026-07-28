@@ -96,6 +96,35 @@ body {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+.panel-head .panel-title {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.panel-head .panel-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-nota {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* --- Perfil del titular --- */
+.panel--perfil {
+  margin-top: 1.5rem;
+}
 
 /* --- Dropzone --- */
 .drop {
@@ -169,6 +198,21 @@ body {
 .msg--error {
   color: var(--danger);
 }
+.msg--exito {
+  color: var(--accent);
+  font-weight: 600;
+}
+.exito {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+.exito .msg {
+  margin: 0;
+}
 .avisos {
   list-style: none;
   margin: 0.9rem 0 0;
@@ -236,6 +280,45 @@ body {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.btn--sm {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.8rem;
+  flex: 0 0 auto;
+}
+/* Botones que en realidad son <label> con un input de archivo oculto. */
+.btn input[type="file"] {
+  display: none;
+}
+
+/* --- Firma --- */
+.firma-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.firma-preview {
+  max-width: 160px;
+  max-height: 48px;
+  /* El escaneo suele traer fondo blanco: se mantiene legible en modo oscuro. */
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 2px;
+}
+.firma-vacia {
+  flex: 1 1 12rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.firma-acciones {
+  display: flex;
+  gap: 0.4rem;
+  margin-left: auto;
 }
 
 /* --- Formulario --- */

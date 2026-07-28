@@ -81,9 +81,11 @@ export function hoyDMA(): FechaDMA {
 }
 
 // "Zapopan Jalisco, 24 de Julio 2026" a partir de la fecha de hoy.
+// Sin lugar configurado, devuelve solo la fecha.
 export function lugarFechaHoy(lugar: string): string {
   const d = new Date();
-  return `${lugar}, ${d.getDate()} de ${MESES_CAP[d.getMonth()]} ${d.getFullYear()}`;
+  const fecha = `${d.getDate()} de ${MESES_CAP[d.getMonth()]} ${d.getFullYear()}`;
+  return lugar.trim() ? `${lugar.trim()}, ${fecha}` : fecha;
 }
 
 // Intenta interpretar una fecha en texto ("11 DE JUNIO 6:30",

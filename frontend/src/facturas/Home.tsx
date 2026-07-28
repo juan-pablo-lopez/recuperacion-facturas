@@ -1,16 +1,28 @@
 import { useCallback, useRef, useState } from "react";
 import {
+  FiCheckCircle,
   FiDownload,
   FiEye,
   FiFileText,
+  FiRotateCcw,
+  FiTrash2,
   FiUploadCloud,
+  FiUser,
   FiAlertTriangle,
 } from "react-icons/fi";
-import type { DatosFormulario, PersonaNombre } from "./types";
+import type { DatosFormulario, PerfilTitular, PersonaNombre } from "./types";
 import { parseCfdi } from "./parseCfdi";
 import { buildFormPdf } from "./buildFormPdf";
 import { descargar, empaquetarZip, unirPdfs } from "./assemble";
 import { normalizar } from "./util";
+import {
+  archivoAFirma,
+  camposFaltantes,
+  guardarPerfil,
+  leerPerfil,
+  nombreCompletoTitular,
+  perfilCompleto,
+} from "./perfil";
 
 // --- Memoria local de fechas de nacimiento por paciente ---
 const LS_KEY = "recfact:fechasNacimiento";
@@ -41,11 +53,18 @@ interface ArchivoPdf {
 }
 
 export default function Home() {
+  const [perfil, setPerfil] = useState<PerfilTitular>(leerPerfil);
+  // Si aún no hay perfil, el panel arranca abierto para pedir la captura.
+  const [perfilAbierto, setPerfilAbierto] = useState(
+    () => !perfilCompleto(leerPerfil())
+  );
+
   const [datos, setDatos] = useState<DatosFormulario | null>(null);
   const [nombreBase, setNombreBase] = useState("");
   const [xmlTexto, setXmlTexto] = useState("");
   const [avisos, setAvisos] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const [exito, setExito] = useState("");
 
   const [facturaPdf, setFacturaPdf] = useState<ArchivoPdf | null>(null);
   const [extraPdf, setExtraPdf] = useState<ArchivoPdf | null>(null);
@@ -55,35 +74,50 @@ export default function Home() {
 
   const dropRef = useRef<HTMLDivElement>(null);
 
-  const cargarXml = useCallback(async (file: File) => {
-    setError("");
+  // Cada edición del perfil se persiste: es configuración, no estado de sesión.
+  const actualizarPerfil = useCallback((p: PerfilTitular) => {
+    setPerfil(p);
     try {
-      const texto = await leerTexto(file);
-      const res = parseCfdi(texto, file.name);
-      // Prellena la fecha de nacimiento si ya la conocíamos.
-      const mapa = leerFechasNac();
-      const nombrePac = [
-        res.datos.paciente.nombre,
-        res.datos.paciente.apellidoPaterno,
-        res.datos.paciente.apellidoMaterno,
-      ]
-        .filter(Boolean)
-        .join(" ");
-      const recordada = mapa[normalizar(nombrePac)];
-      if (recordada) res.datos.fechaNacimiento = recordada;
-
-      setDatos(res.datos);
-      setNombreBase(res.nombreBase);
-      setXmlTexto(texto);
-      setAvisos(res.avisos);
-      setPreviewUrl("");
+      guardarPerfil(p);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo leer el XML.");
+      setError(e instanceof Error ? e.message : "No se pudo guardar el perfil.");
     }
   }, []);
 
+  const cargarXml = useCallback(
+    async (file: File) => {
+      setError("");
+      setExito("");
+      try {
+        const texto = await leerTexto(file);
+        const res = parseCfdi(texto, file.name, perfil);
+        // Prellena la fecha de nacimiento si ya la conocíamos.
+        const mapa = leerFechasNac();
+        const nombrePac = [
+          res.datos.paciente.nombre,
+          res.datos.paciente.apellidoPaterno,
+          res.datos.paciente.apellidoMaterno,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const recordada = mapa[normalizar(nombrePac)];
+        if (recordada) res.datos.fechaNacimiento = recordada;
+
+        setDatos(res.datos);
+        setNombreBase(res.nombreBase);
+        setXmlTexto(texto);
+        setAvisos(res.avisos);
+        setPreviewUrl("");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "No se pudo leer el XML.");
+      }
+    },
+    [perfil]
+  );
+
   const cargarPdf = useCallback(
     async (file: File, slot: "factura" | "extra") => {
+      setExito("");
       const buffer = await leerBuffer(file);
       const archivo = { nombre: file.name, buffer };
       if (slot === "factura") setFacturaPdf(archivo);
@@ -131,13 +165,31 @@ export default function Home() {
     [manejarArchivos]
   );
 
-  const listo = Boolean(datos && facturaPdf && extraPdf);
+  // Deja la app como recién abierta, sin tocar el perfil ni las fechas guardadas.
+  const reiniciar = useCallback(() => {
+    setDatos(null);
+    setNombreBase("");
+    setXmlTexto("");
+    setAvisos([]);
+    setError("");
+    setExito("");
+    setFacturaPdf(null);
+    setExtraPdf(null);
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
+  }, []);
+
+  const hayAlgo = Boolean(datos || facturaPdf || extraPdf);
+  const faltanPerfil = camposFaltantes(perfil);
+  const listo = Boolean(datos && facturaPdf && extraPdf) && faltanPerfil.length === 0;
 
   const vistaPrevia = useCallback(async () => {
     if (!datos) return;
     setOcupado(true);
     try {
-      const bytes = await buildFormPdf(datos);
+      const bytes = await buildFormPdf(datos, perfil);
       const blob = new Blob([bytes.slice().buffer as ArrayBuffer], {
         type: "application/pdf",
       });
@@ -150,14 +202,15 @@ export default function Home() {
     } finally {
       setOcupado(false);
     }
-  }, [datos]);
+  }, [datos, perfil]);
 
   const generar = useCallback(async () => {
     if (!datos || !facturaPdf || !extraPdf) return;
     setOcupado(true);
     setError("");
+    setExito("");
     try {
-      const formato = await buildFormPdf(datos);
+      const formato = await buildFormPdf(datos, perfil);
       const ensamblado = await unirPdfs(
         formato,
         facturaPdf.buffer,
@@ -175,12 +228,13 @@ export default function Home() {
       guardarFechaNac(nombrePac, datos.fechaNacimiento);
 
       descargar(zip, `${nombreBase}.zip`);
+      setExito(`Se descargó ${nombreBase}.zip`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo generar el paquete.");
     } finally {
       setOcupado(false);
     }
-  }, [datos, facturaPdf, extraPdf, nombreBase, xmlTexto]);
+  }, [datos, facturaPdf, extraPdf, nombreBase, xmlTexto, perfil]);
 
   return (
     <div className="app">
@@ -193,9 +247,24 @@ export default function Home() {
         </p>
       </header>
 
+      <PanelPerfil
+        perfil={perfil}
+        onChange={actualizarPerfil}
+        abierto={perfilAbierto}
+        onToggle={setPerfilAbierto}
+        faltantes={faltanPerfil}
+      />
+
       <div className="layout">
         <section className="panel">
-          <h2 className="panel-title">1 · Archivos</h2>
+          <div className="panel-head">
+            <h2 className="panel-title">1 · Archivos</h2>
+            {hayAlgo && (
+              <button className="btn btn--sm" onClick={reiniciar} disabled={ocupado}>
+                <FiTrash2 /> Limpiar
+              </button>
+            )}
+          </div>
           <div
             ref={dropRef}
             className="drop"
@@ -265,22 +334,39 @@ export default function Home() {
               </span>
             </div>
           )}
-          <div className="acciones">
-            <button
-              className="btn"
-              disabled={!datos || ocupado}
-              onClick={vistaPrevia}
-            >
-              <FiEye /> Ver formato
-            </button>
-            <button
-              className="btn btn--primary"
-              disabled={!listo || ocupado}
-              onClick={generar}
-            >
-              <FiDownload /> {ocupado ? "Generando…" : "Generar ZIP"}
-            </button>
-          </div>
+          {exito ? (
+            <div className="exito">
+              <p className="msg msg--exito">
+                <FiCheckCircle /> {exito}
+              </p>
+              <button className="btn btn--primary" onClick={reiniciar}>
+                <FiRotateCcw /> Procesar otra factura
+              </button>
+            </div>
+          ) : (
+            <div className="acciones">
+              <button
+                className="btn"
+                disabled={!datos || ocupado}
+                onClick={vistaPrevia}
+              >
+                <FiEye /> Ver formato
+              </button>
+              <button
+                className="btn btn--primary"
+                disabled={!listo || ocupado}
+                onClick={generar}
+              >
+                <FiDownload /> {ocupado ? "Generando…" : "Generar ZIP"}
+              </button>
+            </div>
+          )}
+          {!exito && datos && faltanPerfil.length > 0 && (
+            <p className="msg msg--error">
+              <FiAlertTriangle /> Completa los datos del titular para generar el
+              ZIP.
+            </p>
+          )}
         </section>
       </div>
 
@@ -294,6 +380,158 @@ export default function Home() {
         </section>
       )}
     </div>
+  );
+}
+
+// --- Perfil del titular: datos fijos por persona, guardados en localStorage ---
+function PanelPerfil({
+  perfil,
+  onChange,
+  abierto,
+  onToggle,
+  faltantes,
+}: {
+  perfil: PerfilTitular;
+  onChange: (p: PerfilTitular) => void;
+  abierto: boolean;
+  onToggle: (v: boolean) => void;
+  faltantes: string[];
+}) {
+  const [errorFirma, setErrorFirma] = useState("");
+
+  const set = <K extends keyof PerfilTitular>(k: K, v: PerfilTitular[K]) =>
+    onChange({ ...perfil, [k]: v });
+  const setTitular = (campo: keyof PersonaNombre, v: string) =>
+    onChange({ ...perfil, titular: { ...perfil.titular, [campo]: v } });
+
+  const subirFirma = async (file: File) => {
+    setErrorFirma("");
+    try {
+      set("firma", await archivoAFirma(file));
+    } catch (e) {
+      setErrorFirma(
+        e instanceof Error ? e.message : "No se pudo procesar la firma."
+      );
+    }
+  };
+
+  const nombre = nombreCompletoTitular(perfil);
+
+  return (
+    <section className="panel panel--perfil">
+      <div className="panel-head">
+        <h2 className="panel-title">
+          <FiUser /> Datos del titular y depósito{" "}
+          <span className="panel-sub">
+            {nombre ? `· ${nombre}` : "· sin configurar"}
+          </span>
+        </h2>
+        <button className="btn btn--sm" onClick={() => onToggle(!abierto)}>
+          {abierto ? "Ocultar" : "Editar"}
+        </button>
+      </div>
+
+      {!abierto && faltantes.length > 0 && (
+        <p className="msg msg--error">
+          <FiAlertTriangle /> Faltan: {faltantes.join(", ")}.
+        </p>
+      )}
+
+      {abierto && (
+        <>
+          <p className="panel-nota">
+            Se guardan solo en este navegador y se reutilizan en cada factura.
+          </p>
+          <div className="form-grid">
+            <fieldset>
+              <legend>Titular</legend>
+              <Campo
+                label="Apellido paterno"
+                value={perfil.titular.apellidoPaterno}
+                onChange={(v) => setTitular("apellidoPaterno", v)}
+              />
+              <Campo
+                label="Apellido materno"
+                value={perfil.titular.apellidoMaterno}
+                onChange={(v) => setTitular("apellidoMaterno", v)}
+              />
+              <Campo
+                label="Nombre"
+                value={perfil.titular.nombre}
+                onChange={(v) => setTitular("nombre", v)}
+              />
+              <Campo
+                label="Número de empleado"
+                value={perfil.numeroEmpleado}
+                onChange={(v) => set("numeroEmpleado", v)}
+              />
+            </fieldset>
+
+            <fieldset>
+              <legend>Depósito</legend>
+              <Campo
+                label="CLABE"
+                value={perfil.clabe}
+                placeholder="18 dígitos"
+                onChange={(v) => set("clabe", v)}
+              />
+              <Campo
+                label="Banco"
+                value={perfil.banco}
+                placeholder="BBVA"
+                onChange={(v) => set("banco", v)}
+              />
+              <Campo
+                label="Lugar (para el pie del formato)"
+                value={perfil.lugar}
+                placeholder="Zapopan Jalisco"
+                onChange={(v) => set("lugar", v)}
+              />
+
+              <div className="campo">
+                <span>Firma escaneada (opcional)</span>
+                <div className="firma-row">
+                  {perfil.firma ? (
+                    <img className="firma-preview" src={perfil.firma} alt="Firma" />
+                  ) : (
+                    <span className="firma-vacia">
+                      Sin firma: el PDF deja una línea para firmar a mano.
+                    </span>
+                  )}
+                  <div className="firma-acciones">
+                    <label className="btn btn--sm">
+                      <FiUploadCloud /> Subir imagen
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) subirFirma(f);
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {perfil.firma && (
+                      <button
+                        className="btn btn--sm"
+                        onClick={() => set("firma", "")}
+                      >
+                        <FiTrash2 /> Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {errorFirma && (
+                <p className="msg msg--error">
+                  <FiAlertTriangle /> {errorFirma}
+                </p>
+              )}
+            </fieldset>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
