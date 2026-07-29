@@ -2,14 +2,19 @@ import { PDFDocument } from "pdf-lib";
 import JSZip from "jszip";
 
 // Une, en orden: formato -> factura -> documento extra.
+// El extra es opcional (suele ser el estado de cuenta que confirma los datos
+// de depósito, y no siempre lo piden).
 export async function unirPdfs(
   formato: Uint8Array,
   factura: ArrayBuffer,
-  extra: ArrayBuffer
+  extra?: ArrayBuffer | null
 ): Promise<Uint8Array> {
   const salida = await PDFDocument.create();
 
-  for (const fuente of [formato.slice().buffer as ArrayBuffer, factura, extra]) {
+  const fuentes = [formato.slice().buffer as ArrayBuffer, factura];
+  if (extra) fuentes.push(extra);
+
+  for (const fuente of fuentes) {
     const doc = await PDFDocument.load(fuente);
     const paginas = await salida.copyPages(doc, doc.getPageIndices());
     paginas.forEach((p) => salida.addPage(p));

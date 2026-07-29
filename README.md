@@ -3,12 +3,13 @@
 App **100% frontend** que arma el paquete de **reembolso de gastos médicos**
 (formato IBM / AON) a partir de una factura CFDI.
 
-Arrastras tres archivos —el **XML** de la factura, su **PDF**, y un **documento
-extra**— y la app:
+Arrastras el **XML** de la factura y su **PDF** —y, si lo piden, un **documento
+extra** (opcional; suele ser el estado de cuenta que confirma los datos de
+depósito)— y la app:
 
 1. Lee los datos del CFDI (XML).
 2. Llena el formato oficial de reembolso.
-3. Lo une con la factura PDF y el documento extra en un solo PDF.
+3. Lo une con la factura PDF, y con el documento extra si lo cargaste.
 4. Descarga un **ZIP** con el PDF ensamblado + el XML.
 
 Todo ocurre en el navegador: **no hay backend**, nada se sube a ningún
@@ -16,12 +17,12 @@ servidor. Se despliega en GitHub Pages.
 
 ```mermaid
 flowchart LR
-  U["Usuario<br/>(XML + 2 PDF)"] --> P["parseCfdi<br/>(DOMParser)"]
+  U["Usuario<br/>(XML + factura PDF)"] --> P["parseCfdi<br/>(DOMParser)"]
   P --> F["Formulario<br/>editable"]
   F --> B["buildFormPdf<br/>(pdfmake)"]
   B --> M["unirPdfs<br/>(pdf-lib)"]
   FAC["Factura PDF"] --> M
-  EXT["Documento extra PDF"] --> M
+  EXT["Documento extra PDF<br/>(opcional)"] -.-> M
   M --> Z["ZIP<br/>(JSZip)"]
 ```
 

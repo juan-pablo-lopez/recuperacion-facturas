@@ -8,6 +8,7 @@ import {
   FiTrash2,
   FiUploadCloud,
   FiUser,
+  FiX,
   FiAlertTriangle,
 } from "react-icons/fi";
 import type { DatosFormulario, PerfilTitular, PersonaNombre } from "./types";
@@ -183,7 +184,8 @@ export default function Home() {
 
   const hayAlgo = Boolean(datos || facturaPdf || extraPdf);
   const faltanPerfil = camposFaltantes(perfil);
-  const listo = Boolean(datos && facturaPdf && extraPdf) && faltanPerfil.length === 0;
+  // El documento extra no entra aquí: es opcional.
+  const listo = Boolean(datos && facturaPdf) && faltanPerfil.length === 0;
 
   const vistaPrevia = useCallback(async () => {
     if (!datos) return;
@@ -205,7 +207,7 @@ export default function Home() {
   }, [datos, perfil]);
 
   const generar = useCallback(async () => {
-    if (!datos || !facturaPdf || !extraPdf) return;
+    if (!datos || !facturaPdf) return;
     setOcupado(true);
     setError("");
     setExito("");
@@ -214,7 +216,7 @@ export default function Home() {
       const ensamblado = await unirPdfs(
         formato,
         facturaPdf.buffer,
-        extraPdf.buffer
+        extraPdf?.buffer
       );
       const zip = await empaquetarZip(nombreBase, ensamblado, xmlTexto);
 
@@ -242,8 +244,8 @@ export default function Home() {
         <h1>Recuperación de facturas</h1>
         <p>
           Llena el formato de reembolso de gastos médicos con los datos del CFDI
-          y arma un solo PDF con el formato, la factura y el documento extra.
-          Todo en tu navegador: nada se sube a ningún servidor.
+          y arma un solo PDF con el formato, la factura y —si hace falta— un
+          documento extra. Todo en tu navegador: nada se sube a ningún servidor.
         </p>
       </header>
 
@@ -277,7 +279,8 @@ export default function Home() {
           >
             <FiUploadCloud size={28} />
             <p>
-              Arrastra aquí el <strong>XML</strong>, la <strong>factura PDF</strong> y el{" "}
+              Arrastra aquí el <strong>XML</strong> y la{" "}
+              <strong>factura PDF</strong>. Si lo necesitas, agrega también un{" "}
               <strong>documento extra PDF</strong>.
             </p>
             <span className="drop-hint">
@@ -303,6 +306,8 @@ export default function Home() {
               accept="application/pdf,.pdf"
               nombre={extraPdf?.nombre ?? ""}
               onFile={(f) => cargarPdf(f, "extra")}
+              opcional
+              onClear={() => setExtraPdf(null)}
             />
           </div>
 
@@ -541,16 +546,39 @@ function FileSlot({
   accept,
   nombre,
   onFile,
+  opcional,
+  onClear,
 }: {
   label: string;
   accept: string;
   nombre: string;
   onFile: (f: File) => void;
+  opcional?: boolean;
+  onClear?: () => void;
 }) {
   return (
     <label className={`slot ${nombre ? "slot--full" : ""}`}>
-      <span className="slot-label">{label}</span>
+      <span className="slot-label">
+        {label}
+        {opcional && <span className="slot-opcional">opcional</span>}
+      </span>
+      {/* La etiqueta "opcional" ya comunica que puede quedarse vacío. */}
       <span className="slot-name">{nombre || "Sin archivo"}</span>
+      {nombre && onClear && (
+        // Va dentro del <label>, así que hay que frenar la activación del input.
+        <button
+          type="button"
+          className="slot-clear"
+          title="Quitar este archivo"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onClear();
+          }}
+        >
+          <FiX />
+        </button>
+      )}
       <input
         type="file"
         accept={accept}
